@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------
+ * Design tokens
+ * Colores neutrales + colores semanticos para los estados de un
+ * ProcesoLicitacion (CREADO, ANALIZANDO, COMPLETADO, ERROR).
+ * ------------------------------------------------------------------- */
+@theme {
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-500: #2563eb;
+  --color-brand-600: #1d4ed8;
+  --color-brand-700: #1e40af;
+
+  --color-estado-creado: #64748b;
+  --color-estado-creado-bg: #f1f5f9;
+  --color-estado-analizando: #d97706;
+  --color-estado-analizando-bg: #fef3c7;
+  --color-estado-completado: #16a34a;
+  --color-estado-completado-bg: #dcfce7;
+  --color-estado-error: #dc2626;
+  --color-estado-error-bg: #fee2e2;
+
+  --font-sans: "Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+/* Barra de progreso indeterminada usada mientras el backend analiza los
+ * documentos (no hay porcentaje real reportado por la API). */
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.animate-progress-indeterminate {
+  animation: progress-indeterminate 1.4s ease-in-out infinite;
+}
