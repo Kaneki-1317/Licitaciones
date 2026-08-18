@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Excel generado en tiempo de ejecucion ###
+generated/
