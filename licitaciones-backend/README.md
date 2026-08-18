@@ -41,21 +41,26 @@ desarrollo local) en `src/main/resources/application.properties`:
 
 | Variable | Descripcion | Default |
 |---|---|---|
-| `DB_HOST`, `DB_PORT`, `DB_NAME` | Conexion MySQL | `localhost`, `3306`, `licitaciones_db` |
-| `DB_USERNAME`, `DB_PASSWORD` | Credenciales MySQL | `root`, `root` |
+| `PORT` | Puerto HTTP. En Render lo inyecta la plataforma; en local, sin definir, usa 8080 | `8080` |
+| `DB_HOST`, `DB_PORT`, `DB_NAME` | Conexion MySQL | `127.0.0.1`, `3306`, `licitaciones_db` |
+| `DB_USERNAME` | Usuario MySQL | `root` |
+| `DB_PASSWORD` | Password MySQL. **Sin default**: no hay ninguna contrasena real en el codigo fuente, hay que definirla siempre (tambien en local) | *(vacio: la conexion falla si no se define)* |
+| `DB_SSL_MODE` | Modo TLS de MySQL Connector/J (`sslMode`). `PREFERRED` negocia TLS si el servidor lo ofrece y si no, sigue sin TLS (compatible con MySQL local con o sin TLS). En produccion contra un proveedor que exige TLS (ej. Aiven), usar `REQUIRED` | `PREFERRED` |
 | `JPA_DDL_AUTO` | Estrategia de esquema (`update` en dev) | `update` |
 | `N8N_BASE_URL` | URL base de la instancia de n8n | `http://localhost:5678` |
 | `N8N_WEBHOOK_ANALIZAR` | Path del webhook de analisis | `/webhook/licitaciones/analizar` |
 | `N8N_CONNECT_TIMEOUT_MS`, `N8N_READ_TIMEOUT_MS` | Timeouts hacia n8n | `5000`, `180000` |
 | `EXCEL_TEMPLATE_PATH` | Ruta (classpath) de la plantilla | `templates/excel/plantilla_licitacion.xlsx` |
 | `EXCEL_OUTPUT_DIR` | Carpeta donde se guardan los Excel generados | `./generated/excel` |
-| `CORS_ALLOWED_ORIGIN` | Origen permitido (frontend Vite) | `http://localhost:5173` |
+| `CORS_ALLOWED_ORIGIN` | Origen de desarrollo permitido (frontend Vite) | `http://localhost:5173` |
+| `FRONTEND_URL` | Origen de **produccion** adicional (ej. el deploy de Vercel), se suma al de desarrollo sin reemplazarlo (ver [Despliegue en Render](#despliegue-en-render-docker)) | *(vacio: no se agrega ningun origen extra)* |
 | `MAX_FILE_SIZE`, `MAX_REQUEST_SIZE` | Limites de carga de documentos | `50MB`, `300MB` |
 | `JWT_SECRET` | Clave con la que se firman los JWT. **Cambiar siempre en produccion/QA** (el default solo es valido para desarrollo local) | valor generado, ver `application.properties` |
 | `JWT_EXPIRATION` | Vigencia del token en milisegundos | `86400000` (24h) |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Credenciales del **unico** usuario administrador, usadas solo la primera vez que arranca la app (ver [Autenticacion](#autenticacion-jwt)) | `admin`, *(vacio: no crea admin)* |
 
-Crea la base de datos (o deja que `createDatabaseIfNotExist=true` la cree):
+Crea la base de datos (o deja que `createDatabaseIfNotExist=true` la cree, si el
+usuario de MySQL tiene permiso):
 
 ```sql
 CREATE DATABASE IF NOT EXISTS licitaciones_db CHARACTER SET utf8mb4;
@@ -71,7 +76,8 @@ mvnw.cmd spring-boot:run
 ./mvnw spring-boot:run
 ```
 
-Con variables de entorno personalizadas (ejemplo Windows PowerShell):
+`DB_PASSWORD` es obligatoria siempre (tambien en local): no hay ninguna
+contrasena por defecto en el codigo. Ejemplo Windows PowerShell:
 
 ```powershell
 $env:DB_PASSWORD = "mi-password"
@@ -305,6 +311,98 @@ objeto `{ "valor": ..., "archivo": ..., "pagina": ... }`, no como el numero
 Ver [`src/main/resources/templates/excel/README.md`](src/main/resources/templates/excel/README.md)
 para el detalle de la estructura esperada y como reemplazar el placeholder
 incluido por la plantilla oficial.
+
+## Despliegue en Render (Docker)
+
+El `Dockerfile` (raiz de `licitaciones-backend/`) es multi-stage: compila
+con Maven Wrapper sobre `eclipse-temurin:17-jdk-jammy` y la imagen final
+corre solo con `eclipse-temurin:17-jre-jammy` (sin JDK/Maven, usuario sin
+privilegios). Los tests se saltan en el build de la imagen (`-DskipTests`):
+varios requieren un MySQL real en `127.0.0.1` que no existe dentro del
+contenedor; correr `./mvnw test` sigue siendo el paso de CI/desarrollo.
+
+### Configuracion del servicio en Render
+
+| Campo | Valor |
+|---|---|
+| Language / Runtime | `Docker` |
+| Root Directory | `licitaciones-backend` |
+| Dockerfile Path | `licitaciones-backend/Dockerfile` (relativo a la raiz del repo, no al Root Directory) |
+| Build Command | No aplica: con `Language: Docker`, Render construye la imagen a partir del `Dockerfile` (sus propios `RUN`), no de un Build Command manual |
+| Start Command | No aplica: el `ENTRYPOINT` del `Dockerfile` (`java -jar app.jar`) es el que arranca el contenedor |
+
+### Puerto
+
+No hay que configurar nada a mano: Render inyecta la variable de entorno
+`PORT` en el contenedor, y `server.port=${PORT:8080}` (ver
+`application.properties`) hace que Spring Boot escuche ahi automaticamente.
+En local, sin `PORT` definida, sigue usando 8080 como siempre.
+
+### Variables de entorno a crear en Render
+
+Obligatorias para que el servicio arranque:
+
+| Variable | Valor |
+|---|---|
+| `DB_HOST`, `DB_PORT`, `DB_NAME` | Datos de conexion del MySQL de produccion (ej. Aiven) |
+| `DB_USERNAME`, `DB_PASSWORD` | Credenciales de ese MySQL |
+| `DB_SSL_MODE` | `REQUIRED` si el proveedor exige TLS (Aiven lo exige) |
+| `JWT_SECRET` | Un valor propio y aleatorio (32+ bytes) — **no** reutilizar el default de desarrollo |
+
+Recomendadas / segun el caso (todas tienen default si no se definen, ver la
+tabla de [Configuracion](#configuracion) mas arriba):
+
+| Variable | Para que |
+|---|---|
+| `FRONTEND_URL` | Dominio del frontend en Vercel (ej. `https://mi-frontend.vercel.app`), se suma a `http://localhost:5173` sin reemplazarlo |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Solo para el primer arranque, crea el usuario administrador inicial (ver [Autenticacion](#autenticacion-jwt)); se pueden quitar despues |
+| `N8N_BASE_URL`, `N8N_WEBHOOK_ANALIZAR` | Si la instancia de n8n de produccion es distinta a la de desarrollo |
+| `JPA_DDL_AUTO` | Dejar en `update` (default) a menos que se maneje el esquema de otra forma |
+
+⚠️ El workflow de n8n que recibe `N8N_WEBHOOK_ANALIZAR` tiene que estar
+**activado** (toggle arriba a la derecha del editor, no solo guardado): con
+el workflow inactivo, n8n devuelve 404 "not registered" y el backend lo
+traduce en `502 Bad Gateway` al frontend (ver el comentario en
+`application.properties`, ya documentado desde antes de este cambio, no es
+nuevo).
+
+**Ejemplo con Aiven** (sustituye `DB_PASSWORD` por la contrasena real, nunca
+la pongas en el codigo/repo):
+
+```
+DB_HOST=mysql-1d20ba80-cristiandres1317-5d38.l.aivencloud.com
+DB_PORT=21874
+DB_NAME=defaultdb
+DB_USERNAME=avnadmin
+DB_PASSWORD=<la contrasena real, solo en Render>
+DB_SSL_MODE=REQUIRED
+```
+
+⚠️ Sobre `createDatabaseIfNotExist=true` (parte del `spring.datasource.url`
+actual, sin tocar): si el usuario de MySQL en produccion no tiene permiso
+para crear bases de datos, la conexion inicial va a fallar. Con Aiven no es
+un problema: `defaultdb` ya existe de entrada en cualquier servicio Aiven,
+asi que esa clausula simplemente no hace nada (la base ya esta ahi).
+
+⚠️ Sin Flyway ni otra herramienta de migraciones: el esquema (tablas
+`proceso_licitacion`, `resultado_analisis`, `usuarios`) lo crea/actualiza
+Hibernate solo via `spring.jpa.hibernate.ddl-auto=update`, igual en local
+que en Aiven — no se agrego Flyway porque el proyecto no lo usaba y hacerlo
+es un cambio de arquitectura por si solo, fuera del alcance de "conectar
+todo a produccion".
+
+⚠️ `app.excel.output-dir` (por defecto `./generated/excel`) escribe en el
+filesystem del contenedor, que en Render **no es persistente**: los Excel
+generados no sobreviven un redeploy/reinicio. Esto no cambia nada del
+comportamiento actual (no se toco), solo es una limitacion a tener en
+cuenta al operar en Render.
+
+### URL del backend para el frontend (Vercel)
+
+Una vez desplegado, Render asigna una URL del tipo
+`https://<nombre-del-servicio>.onrender.com` (visible en el dashboard del
+servicio). Esa es la URL que va en `VITE_API_BASE_URL` del frontend en
+Vercel — reemplaza al `http://localhost:8080` usado en desarrollo.
 
 ## Notas de diseno
 

@@ -1,0 +1,15 @@
+target/
+.git/
+.idea/
+.vscode/
+*.iml
+*.log
+
+# Excel generado en tiempo de ejecucion (ver app.excel.output-dir) -- no
+# tiene sentido incluirlo en el build context de la imagen.
+generated/
+
+# Por si alguna vez existe un .env local para este backend: nunca debe
+# terminar dentro de la imagen.
+.env
+.env.*
