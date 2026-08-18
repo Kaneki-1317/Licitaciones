@@ -31,6 +31,16 @@ cp .env.example .env
 VITE_API_BASE_URL=http://localhost:8080
 ```
 
+**Producción (Vercel)**: `.env` es local y nunca se sube al repo (ver
+`.gitignore`); Vercel no lo lee. En Vercel, la variable se configura en
+**Project Settings → Environment Variables**, con la URL publica que da
+Render despues del deploy del backend (ver el README de
+`licitaciones-backend`, sección "Despliegue en Render"), por ejemplo:
+
+```
+VITE_API_BASE_URL=https://<nombre-del-servicio>.onrender.com
+```
+
 ## Ejecución
 
 ```bash
