@@ -184,10 +184,19 @@ mvnw.cmd spring-boot:run
 Al arrancar, `config.AdminUsuarioInitializer` crea ese usuario (rol
 `ADMIN`, contrasena tal cual, sin hashear) si todavia no existe uno con ese
 `username`; si ya existe, no lo toca (no resetea la contrasena en cada
-reinicio). Si `ADMIN_PASSWORD` no esta definido, no se crea ningun usuario:
-la aplicacion arranca igual, simplemente nadie puede loguearse todavia
-hasta que definas esas variables. Puedes quitarlas del entorno despues del
-primer arranque exitoso.
+reinicio). Si `ADMIN_PASSWORD` no esta definido, no se crea ningun usuario
+nuevo, pero la aplicacion arranca igual.
+
+⚠️ Esto **solo** importa la primerísima vez, contra una base de datos sin
+ningún usuario todavía: si la tabla `usuarios` ya tiene datos (como el
+Aiven de producción, verificado con usuarios reales), el login funciona
+igual sin que estas variables estén definidas — `auth.AuthService` valida
+directamente contra `UsuarioRepository.findByUsername(...)`, sin depender
+en absoluto de este inicializador ni de `ADMIN_USERNAME`/`ADMIN_PASSWORD`.
+El mensaje de log `"ADMIN_PASSWORD no esta definido..."` que aparece en
+cada arranque cuando esas variables no están puestas es informativo
+(`INFO`), no una advertencia de que algo falle: puedes dejarlas sin
+definir de forma permanente una vez que ya tengas usuarios en la base.
 
 Para el resto de usuarios (otros ADMIN o USER), usa `POST /api/usuarios`
 (ver abajo) autenticado como un ADMIN existente — no hace falta reiniciar

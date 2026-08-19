@@ -45,18 +45,38 @@ public class AuthService {
      * contrasena no coincide: en los tres casos el controller responde el
      * mismo mensaje generico (ver {@link #MENSAJE_CREDENCIALES_INVALIDAS} /
      * AuthController), para no revelar si el usuario existe.
+     *
+     * Logs de diagnostico: van todos en DEBUG (no se imprimen en produccion
+     * salvo que se active explicitamente con LOG_LEVEL=DEBUG), y ninguno
+     * imprime la contrasena ni el JWT completo -- solo username, booleanos
+     * de estado (encontrado/activo/password-coincide) y la confirmacion de
+     * que el token se genero. El unico log que queda visible en produccion
+     * (WARN) sigue sin revelar cual de los tres checks fue el que fallo.
      */
     public Optional<LoginResponseDTO> login(LoginRequestDTO request) {
-        Optional<Usuario> usuario = usuarioService.buscarPorUsername(request.getUsername());
+        log.debug("Login: intento recibido para username '{}'", request.getUsername());
 
-        if (usuario.isEmpty() || !usuario.get().isActivo()
-                || !usuario.get().getPassword().equals(request.getPassword())) {
+        Optional<Usuario> usuario = usuarioService.buscarPorUsername(request.getUsername());
+        log.debug("Login: usuario '{}' encontrado={}", request.getUsername(), usuario.isPresent());
+
+        if (usuario.isEmpty()) {
             log.warn("Intento de login fallido para username '{}'", request.getUsername());
             return Optional.empty();
         }
 
         Usuario encontrado = usuario.get();
+        log.debug("Login: usuario '{}' activo={}", encontrado.getUsername(), encontrado.isActivo());
+
+        boolean passwordCoincide = encontrado.getPassword().equals(request.getPassword());
+        log.debug("Login: password recibida para '{}' coincide={}", encontrado.getUsername(), passwordCoincide);
+
+        if (!encontrado.isActivo() || !passwordCoincide) {
+            log.warn("Intento de login fallido para username '{}'", request.getUsername());
+            return Optional.empty();
+        }
+
         String token = jwtService.generarToken(encontrado.getUsername(), encontrado.getRol());
+        log.debug("Login: JWT generado correctamente para '{}' (rol {})", encontrado.getUsername(), encontrado.getRol());
 
         return Optional.of(LoginResponseDTO.builder()
                 .success(true)

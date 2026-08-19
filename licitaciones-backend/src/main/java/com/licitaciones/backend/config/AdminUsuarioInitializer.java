@@ -20,6 +20,17 @@ import org.springframework.util.StringUtils;
  * Si ADMIN_PASSWORD no se define, NO se crea ningun usuario: es preferible
  * arrancar sin admin (y dejarlo explicito en el log) a hardcodear una
  * contrasena por defecto en el codigo fuente.
+ *
+ * IMPORTANTE: este componente es OPCIONAL y NO condiciona el login en
+ * absoluto. {@code auth.AuthService} valida credenciales consultando
+ * directamente {@code UsuarioRepository.findByUsername(...)} contra la
+ * tabla "usuarios" -- no depende de que este initializer haya corrido, ni
+ * de ADMIN_USERNAME/ADMIN_PASSWORD, ni de ningun estado que este
+ * ApplicationRunner deje. Su unico proposito es crear el usuario cuando
+ * la tabla esta vacia (primer arranque contra una base nueva); si ya hay
+ * usuarios (como en el Aiven de produccion), no hace falta definir estas
+ * variables para nada, y el mensaje de log de abajo es completamente
+ * normal, no indica ningun problema.
  */
 @Component
 @RequiredArgsConstructor
@@ -35,13 +46,16 @@ public class AdminUsuarioInitializer implements ApplicationRunner {
         String password = adminInitProperties.password();
 
         if (!StringUtils.hasText(password)) {
-            log.warn("ADMIN_PASSWORD no esta definido: no se crea/actualiza ningun usuario administrador. "
-                    + "Define ADMIN_USERNAME y ADMIN_PASSWORD como variables de entorno para inicializar el "
-                    + "primer usuario (no hay endpoint de registro).");
+            log.info("ADMIN_PASSWORD no esta definido: no se crea ningun usuario administrador nuevo. "
+                    + "Esto es normal y NO afecta el login de usuarios que ya existen en la base de datos "
+                    + "(el login valida directamente contra la tabla \"usuarios\", ver auth.AuthService). "
+                    + "Definir ADMIN_USERNAME/ADMIN_PASSWORD solo hace falta para crear el primer usuario "
+                    + "en una base todavia vacia.");
             return;
         }
         if (!StringUtils.hasText(username)) {
-            log.warn("ADMIN_USERNAME esta vacio: no se crea ningun usuario administrador.");
+            log.info("ADMIN_USERNAME esta vacio: no se crea ningun usuario administrador nuevo "
+                    + "(no afecta el login de usuarios que ya existen).");
             return;
         }
 
