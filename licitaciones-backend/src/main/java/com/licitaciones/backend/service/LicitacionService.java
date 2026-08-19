@@ -118,20 +118,20 @@ public class LicitacionService {
     @Transactional(readOnly = true)
     public N8nAnalisisResponseDTO consultarResultado(Long procesoId) {
         obtenerProcesoOrFail(procesoId);
-
-        ResultadoAnalisis resultadoAnalisis = resultadoRepository
-                .findTopByProcesoIdOrderByFechaCreacionDesc(procesoId)
-                .orElseThrow(() -> new ResultadoNoDisponibleException(
-                        "El proceso " + procesoId + " aun no tiene un resultado de analisis disponible"));
-
-        try {
-            return objectMapper.readValue(resultadoAnalisis.getJsonResultado(), N8nAnalisisResponseDTO.class);
-        } catch (JsonProcessingException ex) {
-            throw new IllegalStateException(
-                    "No fue posible deserializar el resultado del analisis del proceso " + procesoId, ex);
-        }
+        return obtenerResultadoAnalisis(procesoId);
     }
 
+    /**
+     * Descarga el Excel generado. El disco del contenedor (Render, sin un
+     * volumen persistente adjunto) no sobrevive a un redeploy ni a que el
+     * servicio se "duerma" y despierte de nuevo -- se pierde cualquier
+     * archivo escrito previamente aunque el proceso siga marcado
+     * COMPLETADO en la base de datos. Como el resultado de n8n si queda
+     * persistido (tabla resultado_analisis), si el archivo no esta en
+     * disco lo regeneramos al vuelo desde ese resultado en vez de fallar:
+     * generarExcel es determinista (misma plantilla + mismo JSON = mismo
+     * archivo), asi que no hace falta volver a llamar a n8n.
+     */
     @Transactional(readOnly = true)
     public Resource descargarExcel(Long procesoId) {
         ProcesoLicitacion proceso = obtenerProcesoOrFail(procesoId);
@@ -144,10 +144,27 @@ public class LicitacionService {
 
         Path archivo = Path.of(proceso.getArchivoGenerado());
         if (!Files.exists(archivo)) {
-            throw new ExcelNoDisponibleException(
-                    "El archivo Excel del proceso " + procesoId + " no se encuentra en el servidor");
+            log.warn("Excel del proceso {} no esta en disco (posible reinicio/redeploy del contenedor); "
+                    + "regenerando desde el resultado de analisis guardado", procesoId);
+            N8nAnalisisResponseDTO resultado = obtenerResultadoAnalisis(procesoId);
+            String rutaExcel = excelService.generarExcel(procesoId, resultado);
+            archivo = Path.of(rutaExcel);
         }
         return new FileSystemResource(archivo);
+    }
+
+    private N8nAnalisisResponseDTO obtenerResultadoAnalisis(Long procesoId) {
+        ResultadoAnalisis resultadoAnalisis = resultadoRepository
+                .findTopByProcesoIdOrderByFechaCreacionDesc(procesoId)
+                .orElseThrow(() -> new ResultadoNoDisponibleException(
+                        "El proceso " + procesoId + " aun no tiene un resultado de analisis disponible"));
+
+        try {
+            return objectMapper.readValue(resultadoAnalisis.getJsonResultado(), N8nAnalisisResponseDTO.class);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException(
+                    "No fue posible deserializar el resultado del analisis del proceso " + procesoId, ex);
+        }
     }
 
     private void guardarResultado(Long procesoId, N8nAnalisisResponseDTO resultado) {
