@@ -47,8 +47,8 @@ desarrollo local) en `src/main/resources/application.properties`:
 | `DB_PASSWORD` | Password MySQL. **Sin default**: no hay ninguna contrasena real en el codigo fuente, hay que definirla siempre (tambien en local) | *(vacio: la conexion falla si no se define)* |
 | `DB_SSL_MODE` | Modo TLS de MySQL Connector/J (`sslMode`). `PREFERRED` negocia TLS si el servidor lo ofrece y si no, sigue sin TLS (compatible con MySQL local con o sin TLS). En produccion contra un proveedor que exige TLS (ej. Aiven), usar `REQUIRED` | `PREFERRED` |
 | `JPA_DDL_AUTO` | Estrategia de esquema (`update` en dev) | `update` |
-| `N8N_BASE_URL` | URL base de la instancia de n8n | `http://localhost:5678` |
-| `N8N_WEBHOOK_ANALIZAR` | Path del webhook de analisis | `/webhook/licitaciones/analizar` |
+| `N8N_BASE_URL` | URL base de la instancia de n8n | `https://n8n-esencia-suite.zntoks.easypanel.host` |
+| `N8N_WEBHOOK_ANALIZAR` | Path del webhook de analisis. **El default ya es el path de produccion** (`/webhook/...`); el workflow correspondiente debe estar activado en n8n, si no, 404 -> `502` (ver mas abajo) | `/webhook/8b450eed-a90b-4575-a5ac-8a77c194fc80` |
 | `N8N_CONNECT_TIMEOUT_MS`, `N8N_READ_TIMEOUT_MS` | Timeouts hacia n8n | `5000`, `180000` |
 | `EXCEL_TEMPLATE_PATH` | Ruta (classpath) de la plantilla | `templates/excel/plantilla_licitacion.xlsx` |
 | `EXCEL_OUTPUT_DIR` | Carpeta donde se guardan los Excel generados | `./generated/excel` |
@@ -356,7 +356,7 @@ tabla de [Configuracion](#configuracion) mas arriba):
 |---|---|
 | `FRONTEND_URL` | Dominio del frontend en Vercel (ej. `https://mi-frontend.vercel.app`), se suma a `http://localhost:5173` sin reemplazarlo |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Solo para el primer arranque, crea el usuario administrador inicial (ver [Autenticacion](#autenticacion-jwt)); se pueden quitar despues |
-| `N8N_BASE_URL`, `N8N_WEBHOOK_ANALIZAR` | Si la instancia de n8n de produccion es distinta a la de desarrollo |
+| `N8N_BASE_URL`, `N8N_WEBHOOK_ANALIZAR` | El default de ambas ya apunta a la instancia y al webhook de **produccion** (`/webhook/...`, no `/webhook-test/...`); solo hace falta definirlas si se usa una instancia de n8n distinta |
 | `JPA_DDL_AUTO` | En Aiven, **usar `validate`**: ya se verifico (2026-08-19, ver mas abajo) que el esquema real coincide exactamente con las entidades JPA. Con `validate` Hibernate solo revisa el esquema al arrancar y nunca crea/altera/borra tablas -- mas seguro que `update` para una base con datos reales |
 
 ⚠️ El workflow de n8n que recibe `N8N_WEBHOOK_ANALIZAR` tiene que estar
