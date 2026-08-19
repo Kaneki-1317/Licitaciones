@@ -1,0 +1,17 @@
+# Configuracion de Netlify para el frontend (licitaciones-frontend/),
+# dentro de este monorepo. "base" le dice a Netlify desde que subcarpeta
+# correr el build -- equivalente al "Root Directory" que usamos en Render
+# para el backend. No toca licitaciones-backend/ para nada.
+[build]
+  base = "licitaciones-frontend"
+  command = "npm run build"
+  publish = "dist"
+
+# SPA routing: cualquier ruta que no sea un archivo estatico (ej. /login,
+# /procesos/33/resultado) se sirve con index.html para que React Router la
+# maneje del lado del cliente -- el mismo problema que resolvimos antes en
+# Vercel con vercel.json, pero con la sintaxis propia de Netlify.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
