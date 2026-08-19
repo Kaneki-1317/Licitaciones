@@ -33,7 +33,16 @@ FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
 # Usuario sin privilegios: el proceso de la aplicacion no corre como root.
-RUN addgroup --system spring && adduser --system --ingroup spring spring
+# IMPORTANTE: WORKDIR /app se creo con root (linea de arriba, antes de
+# este RUN), asi que sin este chown, /app queda root:root y el usuario
+# "spring" NO tiene permiso de escritura ahi -- ExcelService.generarExcel
+# (Files.createDirectories sobre app.excel.output-dir, por defecto
+# "./generated/excel", relativo a /app) fallaria con
+# AccessDeniedException("/app/./generated") al intentar crear esa carpeta
+# en tiempo de ejecucion. El chown le da a "spring" permiso de escritura
+# sobre /app para que pueda crear esa carpeta el mismo.
+RUN addgroup --system spring && adduser --system --ingroup spring spring \
+    && chown spring:spring /app
 USER spring:spring
 
 COPY --from=build /app/target/*.jar app.jar
