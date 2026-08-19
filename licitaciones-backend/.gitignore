@@ -34,3 +34,13 @@ build/
 
 ### Excel generado en tiempo de ejecucion ###
 generated/
+
+### Variables de entorno locales (usar .env.example como referencia) ###
+.env
+.env.*
+!.env.example
+
+### Certificados/claves locales (ej. CA de Aiven si se llega a usar VERIFY_CA) ###
+*.pem
+*.crt
+*.key

@@ -357,7 +357,7 @@ tabla de [Configuracion](#configuracion) mas arriba):
 | `FRONTEND_URL` | Dominio del frontend en Vercel (ej. `https://mi-frontend.vercel.app`), se suma a `http://localhost:5173` sin reemplazarlo |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Solo para el primer arranque, crea el usuario administrador inicial (ver [Autenticacion](#autenticacion-jwt)); se pueden quitar despues |
 | `N8N_BASE_URL`, `N8N_WEBHOOK_ANALIZAR` | Si la instancia de n8n de produccion es distinta a la de desarrollo |
-| `JPA_DDL_AUTO` | Dejar en `update` (default) a menos que se maneje el esquema de otra forma |
+| `JPA_DDL_AUTO` | En Aiven, **usar `validate`**: ya se verifico (2026-08-19, ver mas abajo) que el esquema real coincide exactamente con las entidades JPA. Con `validate` Hibernate solo revisa el esquema al arrancar y nunca crea/altera/borra tablas -- mas seguro que `update` para una base con datos reales |
 
 ⚠️ El workflow de n8n que recibe `N8N_WEBHOOK_ANALIZAR` tiene que estar
 **activado** (toggle arriba a la derecha del editor, no solo guardado): con
@@ -376,7 +376,19 @@ DB_NAME=defaultdb
 DB_USERNAME=avnadmin
 DB_PASSWORD=<la contrasena real, solo en Render>
 DB_SSL_MODE=REQUIRED
+JPA_DDL_AUTO=validate
 ```
+
+✅ **Verificado en vivo contra el Aiven real (2026-08-19)**, no solo en teoria:
+- La app arranca limpio con `DB_SSL_MODE=REQUIRED` + `JPA_DDL_AUTO=validate`:
+  Hibernate valido el esquema de las 3 tablas contra las entidades JPA sin
+  ningun error de compatibilidad.
+- Lectura confirmada de las 3 tablas via la API real (no solo SQL directo):
+  `usuarios` (2 filas: `admin`/ADMIN, `TatianaSofgic`/USER), `proceso_licitacion`
+  (33 filas, `GET /api/licitaciones`), `resultado_analisis` (29 filas,
+  `GET /api/licitaciones/{id}/resultado` en varios procesos).
+- Login/JWT funcionan igual contra Aiven: no se toco `AuthService` ni
+  `JwtAuthenticationFilter`, y no hacia falta.
 
 ⚠️ Sobre `createDatabaseIfNotExist=true` (parte del `spring.datasource.url`
 actual, sin tocar): si el usuario de MySQL en produccion no tiene permiso
@@ -384,12 +396,26 @@ para crear bases de datos, la conexion inicial va a fallar. Con Aiven no es
 un problema: `defaultdb` ya existe de entrada en cualquier servicio Aiven,
 asi que esa clausula simplemente no hace nada (la base ya esta ahi).
 
-⚠️ Sin Flyway ni otra herramienta de migraciones: el esquema (tablas
-`proceso_licitacion`, `resultado_analisis`, `usuarios`) lo crea/actualiza
-Hibernate solo via `spring.jpa.hibernate.ddl-auto=update`, igual en local
-que en Aiven — no se agrego Flyway porque el proyecto no lo usaba y hacerlo
-es un cambio de arquitectura por si solo, fuera del alcance de "conectar
-todo a produccion".
+⚠️ Sin Flyway ni otra herramienta de migraciones: el esquema lo crea/actualiza
+Hibernate via `spring.jpa.hibernate.ddl-auto` (`update` en local,
+**`validate` recomendado en Aiven/produccion**, ver arriba) — no se agrego
+Flyway porque el proyecto no lo usaba y hacerlo es un cambio de arquitectura
+por si solo, fuera del alcance de "conectar todo a produccion".
+
+⚠️ **Hallazgo, sin relacion con esta configuracion, no corregido a
+proposito** (toca `LicitacionService`/logica de negocio, fuera de alcance
+de un cambio de conexion): algunos `resultado_analisis` antiguos (ej.
+proceso 1, del 2026-08-06) tienen texto con caracteres acentuados
+corrompidos (aparecen como `?`) en `json_resultado` -- ya estaba asi en la
+base local ANTES de migrar a Aiven (confirmado comparando ambas: local
+tiene el caracter de reemplazo Unicode `�`, Aiven tiene `?` literal; en
+ningun caso son los bytes UTF-8 originales, se perdieron en algun punto
+anterior a este trabajo, probablemente en el envio original de n8n). El
+proceso 1 especificamente tambien devuelve `500` en
+`GET /api/licitaciones/1/resultado` por un motivo aparte: su JSON usa un
+contrato viejo (`entidad` como texto plano en vez del objeto
+`{valor, pagina}` que espera `CampoTrazableDTO` hoy) — los procesos mas
+nuevos (21, 24, 30, 32, 33) se probaron y devuelven `200` sin problema.
 
 ⚠️ `app.excel.output-dir` (por defecto `./generated/excel`) escribe en el
 filesystem del contenedor, que en Render **no es persistente**: los Excel

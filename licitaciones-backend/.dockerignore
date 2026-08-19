@@ -13,3 +13,8 @@ generated/
 # terminar dentro de la imagen.
 .env
 .env.*
+
+# Certificados/claves locales: nunca deben terminar dentro de la imagen.
+*.pem
+*.crt
+*.key
